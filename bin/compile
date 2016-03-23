@@ -241,9 +241,11 @@ case $TOOL in
         if test "$VendorExperiment" = "true"
         then
             step "Running: go install -v ${FLAGS[@]} $pkgs"
+            # go install -buildmode=pie -v "${FLAGS[@]}" $pkgs
             go install -v "${FLAGS[@]}" $pkgs
         else
             step "Running: godep go install ${FLAGS[@]} $pkgs"
+            # godep go install -buildmode=pie "${FLAGS[@]}" $pkgs
             godep go install "${FLAGS[@]}" $pkgs
         fi
     ;;

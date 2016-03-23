@@ -235,6 +235,22 @@ describe 'CF Go Buildpack' do
     end
   end
 
+  context 'a go 1.6 app' do
+    let(:app_name) { 'go_app_with_wildcard_version/src/go_16_app' }
+
+    it 'should be compiled with buildmode=pie' do
+      expect(app).to be_running
+      browser.visit_path('/')
+      expect(browser).to have_body(/foo: (.*)/)
+      old_address = $1
+      Machete::CF::RestartApp.new.execute(app)
+      expect(app).to be_running
+      browser.visit_path('/')
+      expect(browser).to have_body(/foo: (.*)/)
+      expect($1).not_to eq(old_address)
+    end
+  end
+
   context 'a go app with an invalid wildcard matcher' do
     let(:app_name) { 'go_app_with_invalid_wildcard_version/src/go_app' }
 
