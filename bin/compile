@@ -147,6 +147,10 @@ elif test -f "$build/vendor/vendor.json"
 then
     TOOL="govendor"
     ver=${GOVERSION:-$DEFAULT_GO_VERSION}
+elif (test -d "$build/vendor" && test -n "$(find "$build/" -type f -name '*.go' | sed 1q)")
+then
+    TOOL="native_vendoring"
+    ver=${GOVERSION:-$DEFAULT_GO_VERSION}
 else
     warn "Godep is required. For instructions:"
     warn "https://github.com/cloudfoundry/go-buildpack"
@@ -208,6 +212,8 @@ then
 fi
 
 case $TOOL in
+    native_vendoring)
+    ;&
     godep)
         GOBIN=$build/bin export GOBIN
         GOPATH=$build/.heroku/go export GOPATH
@@ -216,9 +222,13 @@ case $TOOL in
         p=$GOPATH/src/$name
         mkdir -p $p
         cp -R $build/* $p
-
-        pkgs=$(<$build/Godeps/Godeps.json jq -r 'if .Packages then .Packages | join(" ") else "default" end')
-        handleDefaultPkgSpec
+        if test "$TOOL" = "godep"
+        then
+            pkgs=$(<$build/Godeps/Godeps.json jq -r 'if .Packages then .Packages | join(" ") else "default" end')
+            handleDefaultPkgSpec
+        else
+            pkgs="./..."
+        fi
 
         case $ver in
         go1.5*)
@@ -251,6 +261,16 @@ case $TOOL in
             VendorExperiment="false"
         ;;
         esac
+
+        if (test "$VendorExperiment" = "false" && test "$TOOL" = "native_vendoring")
+        then
+            warn ""
+            warn "If you have a vendor directory without Godeps you must use"
+            warn "Go native vendoring. Set \$GO15VENDOREXPERIMENT=1 for Go 1.5,"
+            warn "or do not set \$GOVENDOREXPERIMENT=0 for Go 1.6)"
+            warn ""
+            exit 1
+        fi
 
         unset GIT_DIR # unset git dir or it will mess with goinstall
         cd $p
