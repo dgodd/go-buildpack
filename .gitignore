@@ -3,5 +3,4 @@ go_buildpack*.zip
 .DS_Store
 log/
 .bundle
-vendor
 _workspace
