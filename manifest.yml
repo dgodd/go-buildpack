@@ -5,6 +5,10 @@ url_to_dependency_map: []
 default_versions:
 - name: go
   version: 1.8.0
+- name: glide
+  version: v0.12.3
+- name: godep
+  version: v79
 dependencies:
 - name: go
   version: 1.7.5

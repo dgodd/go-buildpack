@@ -14,6 +14,7 @@ import (
 type GoCompiler struct {
 	Compiler *bp.Compiler
 	Json     bp.JSON
+	Yaml     bp.YAML
 }
 
 func main() {
@@ -26,7 +27,7 @@ func main() {
 		panic(err)
 	}
 
-	goCompiler := GoCompiler{Compiler: compiler, Json: bp.NewJSON()}
+	goCompiler := GoCompiler{Compiler: compiler, Json: bp.NewJSON(), Yaml: bp.NewYAML()}
 	err = goCompiler.Compile()
 	if err != nil {
 		panic(err)
@@ -94,6 +95,27 @@ func (c *GoCompiler) Compile() error {
 	if os.Getenv("GO15VENDOREXPERIMENT") == "0" {
 		c.Compiler.Log.Warning("$GO15VENDOREXPERIMENT=0. To use vendor your packages in vendor\nfor go 1.6 this environment variable must unset or set to 1.")
 		return errors.New("$GO15VENDOREXPERIMENT=0")
+	}
+
+	if tool == "glide" {
+		if hasSubDirs(filepath.Join(c.Compiler.BuildDir, "vendor")) {
+			c.Compiler.Log.BeginStep("Note: skipping (glide install) due to non-empty vendor directory.")
+		} else {
+			c.Compiler.Log.BeginStep("Fetching any unsaved dependencies (glide install)")
+			cmd := exec.Command("/tmp/bin/glide", "install")
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stdout
+			cmd.Dir = packageDir
+			cmd.Env = []string{
+				"GOROOT=" + goRoot,
+				"GOPATH=" + goPath,
+				"GOBIN=" + goBin,
+			}
+			if _, err := cmd.Output(); err != nil {
+				c.Compiler.Log.Error("Could not run glide install")
+				return err
+			}
+		}
 	}
 
 	// FIXME implement equivalent of
@@ -195,8 +217,34 @@ func (c *GoCompiler) determineTool() (string, string, string, error) {
 		return "godir", "", goVersion, errors.New("GoDir is deprecated")
 	}
 
-	if fileExists(filepath.Join(c.Compiler.BuildDir, "glide.yaml")) {
-		return "glide", "", goVersion, nil
+	glideYaml := filepath.Join(c.Compiler.BuildDir, "glide.yaml")
+	if fileExists(glideYaml) {
+		dep, err := c.Compiler.Manifest.DefaultVersion("glide")
+		if err != nil {
+			c.Compiler.Log.Error("Could not find determine default glide version")
+			return "", "", "", errors.New("Could not find determine default glide version")
+		}
+		err = c.Compiler.Manifest.InstallDependency(dep, "/tmp")
+		if err != nil {
+			c.Compiler.Log.Error("Could not install go version %s", goVersion)
+			return "", "", "", err
+		}
+
+		// FIXME Reading glide.yaml directly instead of calling 'glade name'
+		hash := new(struct {
+			Package string `yaml:"package"`
+		})
+		err = c.Yaml.Load(glideYaml, &hash)
+		if err != nil {
+			c.Compiler.Log.Error("Bad glide.yaml file")
+			return "", "", "", err
+		}
+		if hash.Package == "" {
+			c.Compiler.Log.Error("Bad glide.yaml file, must have a package field")
+			return "", "", "", err
+		}
+
+		return "glide", hash.Package, goVersion, nil
 	}
 
 	// elif (test -d "$build/src" && test -n "$(find "$build/src" -mindepth 2 -type f -name '*.go' | sed 1q)")
@@ -211,4 +259,17 @@ func (c *GoCompiler) determineTool() (string, string, string, error) {
 		return "", "", "", errors.New("To use go native vendoring set the $GOPACKAGENAME environment variable to your app's package name")
 	}
 	return "go_nativevendoring", os.Getenv("GOPACKAGENAME"), goVersion, nil
+}
+
+func hasSubDirs(path string) bool {
+	dirs, err := ioutil.ReadDir(path)
+	if err != nil {
+		return false
+	}
+	for _, info := range dirs {
+		if info.Mode().IsDir() {
+			return true
+		}
+	}
+	return false
 }
