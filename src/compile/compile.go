@@ -87,14 +87,33 @@ func (c *GoCompiler) Compile() error {
 	}
 
 	pkgs := os.Getenv("GO_INSTALL_PACKAGE_SPEC")
-	if pkgs == "" || pkgs == "default" {
-		c.Compiler.Log.Warning("Installing package '.' (default)")
-		pkgs = "."
-	}
 
 	if os.Getenv("GO15VENDOREXPERIMENT") == "0" {
 		c.Compiler.Log.Warning("$GO15VENDOREXPERIMENT=0. To use vendor your packages in vendor\nfor go 1.6 this environment variable must unset or set to 1.")
 		return errors.New("$GO15VENDOREXPERIMENT=0")
+	}
+
+	if tool == "godep" {
+		// FIXME implement warnPackageSpecOverride() https://github.com/dgodd/go-buildpack/blob/golang/bin/compile.old#L107
+
+		// FIXME below is already done by detection, skipping error, and should not do at all.
+		godepsJSON := filepath.Join(c.Compiler.BuildDir, "Godeps", "Godeps.json")
+		hash := new(struct {
+			ImportPath string   `yaml:"ImportPath"`
+			GoVersion  string   `yaml:"GoVersion"`
+			Packages   []string `yaml:"Packages"`
+		})
+		c.Json.Load(godepsJSON, &hash)
+		if len(hash.Packages) > 0 {
+			pkgs = strings.Join(hash.Packages, " ")
+		} else {
+			pkgs = "default"
+		}
+	}
+
+	if pkgs == "" || pkgs == "default" {
+		c.Compiler.Log.Warning("Installing package '.' (default)")
+		pkgs = "."
 	}
 
 	if tool == "glide" {
@@ -188,18 +207,22 @@ func (c *GoCompiler) determineTool() (string, string, string, error) {
 	godepsJSON := filepath.Join(c.Compiler.BuildDir, "Godeps", "Godeps.json")
 	if fileExists(godepsJSON) {
 		c.Compiler.Log.BeginStep("Checking Godeps/Godeps.json file.")
-		hash := make(map[string]string)
+		hash := new(struct {
+			ImportPath string   `yaml:"ImportPath"`
+			GoVersion  string   `yaml:"GoVersion"`
+			Packages   []string `yaml:"Packages"`
+		})
 		err := c.Json.Load(godepsJSON, &hash)
 		if err != nil {
 			c.Compiler.Log.Error("Bad Godeps/Godeps.json file")
 			return "", "", "", err
 		}
-		goVersion := hash["GoVersion"]
+		goVersion := hash.GoVersion
 		if os.Getenv("GOVERSION") != "" && os.Getenv("GOVERSION") != goVersion {
 			goVersion = os.Getenv("GOVERSION")
 			c.Compiler.Log.Warning("Using $GOVERSION override.\n      $GOVERSION = ${GOVERSION}\n\nIf this isn't what you want please run:'\n   cf unset-env <app> GOVERSION\n\n")
 		}
-		return "godep", hash["ImportPath"], goVersion, nil
+		return "godep", hash.ImportPath, goVersion, nil
 	}
 
 	goVersion := os.Getenv("GOVERSION")
