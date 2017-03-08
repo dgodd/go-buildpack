@@ -5,11 +5,15 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/Masterminds/semver"
 )
 
 type Manifest interface {
 	DefaultVersion(depName string) (Dependency, error)
+	FindVersion(depName, version string) (Dependency, error)
 	FetchDependency(dep Dependency, outputFile string) error
 	InstallDependency(dep Dependency, outputDir string) error
 	Version() (string, error)
@@ -158,6 +162,31 @@ func (m *manifest) DefaultVersion(depName string) (Dependency, error) {
 	}
 
 	return defaultVersion, nil
+}
+
+func (m *manifest) FindVersion(depName, version string) (Dependency, error) {
+	c, err := semver.NewConstraint(version)
+	if err != nil {
+		return Dependency{}, nil
+	}
+	matching := make(semver.Collection, 0)
+	for _, dep := range m.ManifestEntries {
+		if dep.Dependency.Name == depName {
+			v, _ := semver.NewVersion(dep.Dependency.Version)
+			if c.Check(v) {
+				matching = append(matching, v)
+			}
+		}
+	}
+
+	if len(matching) > 0 {
+		sort.Sort(matching)
+		max := matching[len(matching)-1]
+
+		return Dependency{depName, max.Original()}, nil
+	}
+
+	return Dependency{}, fmt.Errorf("no matching versions found for %s, %s", depName, version)
 }
 
 func (m *manifest) InstallDependency(dep Dependency, outputDir string) error {
