@@ -4,3 +4,6 @@ go_buildpack*.zip
 log/
 .bundle
 _workspace
+
+/bin/mockgen
+/pkg/
