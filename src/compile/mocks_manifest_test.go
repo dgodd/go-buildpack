@@ -40,6 +40,17 @@ func (_mr *_MockManifestRecorder) DefaultVersion(arg0 interface{}) *gomock.Call 
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "DefaultVersion", arg0)
 }
 
+func (_m *MockManifest) FindVersion(depName string, version string) (Dependency, error) {
+	ret := _m.ctrl.Call(_m, "FindVersion", depName, version)
+	ret0, _ := ret[0].(Dependency)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockManifestRecorder) FindVersion(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "FindVersion", arg0, arg1)
+}
+
 func (_m *MockManifest) FetchDependency(dep Dependency, outputFile string) error {
 	ret := _m.ctrl.Call(_m, "FetchDependency", dep, outputFile)
 	ret0, _ := ret[0].(error)
